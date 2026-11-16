@@ -1,15 +1,18 @@
 ## Task 1 — Terraform
 
 ### 1a: NACL Fixes
-`1.Sifat Stateless dari NACL:`
-Network ACL (NACL) adalah lapisan keamanan di tingkat subnet yang bersifat stateless. Ini berarti NACL tidak melacak status koneksi jaringan (tidak seperti Security Groups yang stateful). Setiap paket, baik masuk maupun keluar, dievaluasi secara terpisah terhadap aturan yang ada.
-`2.Mekanisme Drop Tanpa Balasan:`
-Ketika pod EKS mencoba menghubungi database di protected subnet, paket dikirimkan dengan rentang IP pod (100.64.0.0/16) akibat penggunaan VPC CNI prefix delegation. Karena aturan NACL sebelumnya hanya mengizinkan CIDR node (10.10.64.0/20), paket dari pod gagal mencocokkan aturan allow apa pun. Sesuai aturan standar AWS, jika paket tidak cocok dengan aturan yang diizinkan, paket tersebut langsung dibuang secara diam-diam (dropped silently). AWS router tidak mengirimkan paket penolakan seperti TCP RST (Reset) atau ICMP Destination Unreachable kembali ke pengirim.
-`3.Dampak pada Aplikasi:`
-Karena tidak ada paket TCP RST yang dikembalikan untuk menghentikan koneksi secara instan, aplikasi di dalam pod akan terus menunggu (hanging) hingga connection timeout tercapai, membuat masalah ini lebih sulit didiagnosis.Dengan menambahkan aturan eksplisit untuk CIDR 100.64.0.0/16 pada port 5432 (PostgreSQL), 6379 (Redis), dan ephemeral ports outbound (1024-65535), komunikasi pod ke database kini diizinkan dengan benar.
+1. NACL itu "Pelupa" (Stateless)
+Beda sama Security Group yang ingat riwayat koneksi (stateful), NACL itu enggak. Tiap ada paket data masuk atau keluar, dia bakal ngecek ulang dari nol tanpa peduli sebelumnya udah pernah komunikasi atau belum.
+
+2. Dropped Silently
+Gara-gara pakai fitur VPC CNI, IP pod berubah pakai rentang 100.64.0.0/16. Padahal, aturan di NACL cuma ngizinin IP node (10.10.64.0/20). Alhasil, paket dari pod langsung dibuang begitu saja tanpa suara, dan server enggak ngasih tahu si pengirim kalau paketnya ditolak (enggak ada balasan kayak TCP RST).
+
+3. Buat Aplikasi Hanging & Solusinya
+Karena enggak ada kabar kalau paketnya ditolak, aplikasi di dalam pod jadi nunggu terus (hanging) sampai timeout. Inilah yang bikin masalah kemarin susah ditebak.
+Solusinya: Tinggal tambahin aturan di NACL supaya IP pod (100.64.0.0/16) diizinkan lewat untuk port database (5432), Redis (6379), dan port jalur pulang (1024-65535).
 
 ### 1b: RDS Module — Bugs Fixed
-* **Public Access Fix (`publicly_accessible = false`):** Memastikan instance RDS tidak terekspos ke internet publik dan tetap terisolasi sepenuhnya di dalam *protected subnets* (sesuai arsitektur *three-tier VPC*).
+* **Public Access Fix (`publicly_accessible = false`):** Memastikan instance RDS tidak terekspos ke internet publik dan tetap terisolasi sepenuhnya di dalam *protected subnets* 
 * **Storage Encryption (`storage_encrypted = true`):** Mengaktifkan enkripsi *at-rest* untuk mematuhi standar keamanan produksi platform AI.
 
 ### 1b: RDS Parameter Group — TLS Enforcement
@@ -23,7 +26,7 @@ Karena tidak ada paket TCP RST yang dikembalikan untuk menghentikan koneksi seca
 
 ### 2a: NodePool Design Decisions
 * **Instance Family Selection:** 
-  * `helios-ai-app` menggunakan keluarga *Compute/Memory-optimized* (`c`, `m`) untuk memastikan latensi rendah pada API Gateway dan penanganan *throughput* tinggi untuk inferensi LLM.
+  * `helios-ai-app` menggunakan keluarga *Compute/Memory-optimized* (`c`, `m`) untuk memastikan latensi rendah pada API Gateway dan penanganan *throughput* tinggi untuk kebutuhan LLM.
   * `helios-ai-db` (atau *cache/stateful pool*) menggunakan keluarga *Memory-optimized* (`m`, `r`) guna mengakomodasi kebutuhan penyimpanan *in-memory* yang besar.
 * **Spot vs. On-Demand Strategy:** 
   * NodePool aplikasi diatur menggunakan kombinasi *Spot* dan *On-Demand* untuk menyeimbangkan efisiensi biaya operasional (*cost-efficiency*) dan ketersediaan layanan.
