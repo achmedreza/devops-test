@@ -1,7 +1,7 @@
 ## Task 1 — Terraform
 
 ### 1a: NACL Fixes
-1. NACL itu "Pelupa" (Stateless)
+1. NACL itu (Stateless)
 Beda sama Security Group yang ingat riwayat koneksi (stateful), NACL itu enggak. Tiap ada paket data masuk atau keluar, dia bakal ngecek ulang dari nol tanpa peduli sebelumnya udah pernah komunikasi atau belum.
 
 2. Dropped Silently
