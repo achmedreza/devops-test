@@ -11,15 +11,11 @@ Gara-gara pakai fitur VPC CNI, IP pod berubah pakai rentang 100.64.0.0/16. Padah
 Karena enggak ada kabar kalau paketnya ditolak, aplikasi di dalam pod jadi nunggu terus (hanging) sampai timeout. Inilah yang bikin masalah kemarin susah ditebak.
 Solusinya: Tinggal tambahin aturan di NACL supaya IP pod (100.64.0.0/16) diizinkan lewat untuk port database (5432), Redis (6379), dan port jalur pulang (1024-65535).
 
-### 1b: RDS Module — Bugs Fixed
-* **Public Access Fix (`publicly_accessible = false`):** Memastikan instance RDS tidak terekspos ke internet publik dan tetap terisolasi sepenuhnya di dalam *protected subnets* 
-* **Storage Encryption (`storage_encrypted = true`):** Mengaktifkan enkripsi *at-rest* untuk mematuhi standar keamanan produksi platform AI.
-
-### 1b: RDS Parameter Group — TLS Enforcement
-* Menambahkan resource `aws_db_parameter_group` dengan parameter `rds.force_ssl = 1` untuk memaksa enkripsi TLS pada seluruh koneksi ke database PostgreSQL, lalu mereferensikannya pada `aws_db_instance.app`.
+### 1b RDS Module — Bugs Fixed
+Memperbaiki urutan resource terraform. Blok ingress dan egress yang nempel langsung di dalam resource utama dipisah keluar menjadi resource independen, yaitu aws_security_group_rule (rds_ingress_proxy dan rds_proxy_egress_rds). Dengan begitu Terraform bisa baca urutan yang sesuai.
 
 ### 1b: RDS Proxy — Design Decisions
-* **Connection Pooling & Scalability:** Mengonfigurasi `aws_db_proxy.app` di dalam *protected subnets* untuk mengelola lonjakan koneksi bersamaan (*concurrency*) dari aplikasi AI dan LLM backend, mencegah *connection exhaustion* pada database utama.
+* **Connection Pooling & Scalability:** Mengonfigurasi `aws_db_proxy.app` di dalam *protected subnets* untuk mengelola lonjakan koneksi bersamaan (*concurrency*) dari aplikasi, mencegah *connection exhaustion* pada database utama.
 * **Secret Management & Security:** Mengintegrasikan autentikasi RDS Proxy menggunakan AWS Secrets Manager (`auth_scheme = "SECRETS"`) dan mewajibkan komunikasi terenkripsi melalui `require_tls = true`.
 
 ## Task 2 — Kubernetes
